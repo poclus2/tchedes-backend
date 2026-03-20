@@ -1,0 +1,4 @@
+{
+  "dashboard_conf": "server {\n    listen 80;\n    server_name app.tchedes.dartsia.app;\n\n    location / {\n        proxy_pass http://tchedes-dashboard:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection 'upgrade';\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Ssl on;\n        proxy_cache_bypass $http_upgrade;\n    }\n}",
+  "ssl_certs_dir": "total 24\ndrwxr-xr-x 2 root root 4096 Mar  2 16:05 .\ndrwxr-xr-x 4 root root 4096 Jan 30 07:21 ..\n-rw-r--r-- 1 root root 1382 Jan 30 12:18 app.conf\n-rw-r--r-- 1 root root  453 Mar  2 14:01 dartsia.conf\n-rw-r--r-- 1 root root  560 Mar  2 16:05 tchedes-dashboard.conf\n-rw-r--r-- 1 root root  383 Mar  2 16:05 tchedes-vitrine.conf"
+}

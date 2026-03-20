@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  tchedes-api:
+    build: .
+    container_name: tchedes-api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://tchedes_user:tchedes_secure_pass_2026@tchedes-db:5432/tchedes_db?schema=public
+      - REDIS_URL=redis://tchedes-redis:6379\n      - REDIS_HOST=tchedes-redis
+      - JWT_SECRET=${JWT_SECRET:-tchedes_super_secret_jwt_key_prod}
+      - CORS_ORIGIN=https://tchedes.dartsia.app,https://app-tchedes.dartsia.app,https://dashboard.dartsia.app
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json # Make sure to mount or copy this file
+    depends_on:
+      - tchedes-db
+      - tchedes-redis
+    volumes:
+      - ./gcp-key.json:/app/gcp-key.json:ro # Mount GCP key read-only (Must be present on host)
+
+  tchedes-worker:
+    build: .
+    container_name: tchedes-worker
+    restart: always
+    command: npm run worker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://tchedes_user:tchedes_secure_pass_2026@tchedes-db:5432/tchedes_db?schema=public
+      - REDIS_URL=redis://tchedes-redis:6379
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+    depends_on:
+      - tchedes-db
+      - tchedes-redis
+    volumes:
+      - ./gcp-key.json:/app/gcp-key.json:ro
+
+  tchedes-db:
+    image: postgres:16-alpine
+    container_name: tchedes-db
+    restart: always
+    environment:
+      - POSTGRES_USER=tchedes_user
+      - POSTGRES_PASSWORD=tchedes_secure_pass_2026
+      - POSTGRES_DB=tchedes_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  tchedes-redis:
+    image: redis:7-alpine
+    container_name: tchedes-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

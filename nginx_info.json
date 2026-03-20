@@ -1,0 +1,46 @@
+{
+  "nginx_mounts": [
+    {
+      "Type": "bind",
+      "Source": "/root/app/nginx/conf.d",
+      "Destination": "/etc/nginx/conf.d",
+      "Mode": "rw",
+      "RW": true,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/root/app/nginx/ssl",
+      "Destination": "/etc/nginx/ssl",
+      "Mode": "rw",
+      "RW": true,
+      "Propagation": "rprivate"
+    }
+  ],
+  "api_ip": {
+    "tchedes-api_default": {
+      "IPAMConfig": null,
+      "Links": null,
+      "Aliases": [
+        "tchedes-api",
+        "tchedes-api"
+      ],
+      "DriverOpts": null,
+      "GwPriority": 0,
+      "NetworkID": "f65ca871f734bc6fa6d37d430a1694d4599d488470b0447a23951f09690e6730",
+      "EndpointID": "f31af76bcd051b1a67ae183878b7151f8600c0940f449ad11bf548a36e28e0f5",
+      "Gateway": "172.19.0.1",
+      "IPAddress": "172.19.0.5",
+      "MacAddress": "4a:11:15:ab:6a:e5",
+      "IPPrefixLen": 16,
+      "IPv6Gateway": "",
+      "GlobalIPv6Address": "",
+      "GlobalIPv6PrefixLen": 0,
+      "DNSNames": [
+        "tchedes-api",
+        "7e3d1f18c71a"
+      ]
+    }
+  },
+  "nginx_conf_files": "total 12\ndrwxr-xr-x    2 root     root          4096 Jan 30 12:18 .\ndrwxr-xr-x    1 root     root          4096 Feb  8 09:08 ..\n-rw-r--r--    1 root     root          1382 Jan 30 12:18 app.conf"
+}

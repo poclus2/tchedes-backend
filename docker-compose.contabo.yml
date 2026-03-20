@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  tchedes-api:
+    build: .
+    container_name: tchedes-api
+    restart: always
+    ports:
+      - "3015:3000"
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=https://app-tchedes.dartsia.app
+      - PORT=3000
+      - DATABASE_URL=postgresql://tchedes_user:tchedes_secure_pass_2026@tchedes-db:5432/tchedes_db?schema=public
+      - REDIS_URL=redis://tchedes-redis:6379
+      - REDIS_HOST=tchedes-redis
+      - JWT_SECRET=${JWT_SECRET:-tchedes_super_secret_jwt_key_prod}
+      - CORS_ORIGIN=https://tchedes.dartsia.app,https://app-tchedes.dartsia.app,https://dashboard.dartsia.app
+    depends_on:
+      - tchedes-db
+      - tchedes-redis
+    volumes:
+      - uploads_data:/app/uploads
+
+  tchedes-worker:
+    build: .
+    container_name: tchedes-worker
+    restart: always
+    command: npm run worker
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=https://app-tchedes.dartsia.app
+      - DATABASE_URL=postgresql://tchedes_user:tchedes_secure_pass_2026@tchedes-db:5432/tchedes_db?schema=public
+      - REDIS_URL=redis://tchedes-redis:6379
+      - REDIS_HOST=tchedes-redis
+      - OCR_SERVICE_URL=http://python-ocr:8000
+    depends_on:
+      - tchedes-db
+      - tchedes-redis
+      - python-ocr
+    volumes:
+      - uploads_data:/app/uploads
+
+  tchedes-db:
+    image: postgres:16-alpine
+    container_name: tchedes-db
+    restart: always
+    environment:
+      - POSTGRES_USER=tchedes_user
+      - POSTGRES_PASSWORD=tchedes_secure_pass_2026
+      - POSTGRES_DB=tchedes_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  tchedes-redis:
+    image: redis:7-alpine
+    container_name: tchedes-redis
+    restart: always
+    volumes:
+      - redisdata:/data
+
+  python-ocr:
+    build: ./python-ocr
+    container_name: python-ocr
+    restart: always
+    ports:
+      - "8015:8000"
+    volumes:
+      - uploads_data:/app/uploads
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads_data:

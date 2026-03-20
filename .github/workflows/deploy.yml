@@ -1,0 +1,45 @@
+name: Deploy Backend to Contabo
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Copy files to Contabo Server via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: "."
+          target: "/opt/tchedes-backend"
+
+      - name: Rebuild Docker Containers via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            cd /opt/tchedes-backend
+            
+            # Stop and remove old backend containers
+            docker compose -f docker-compose.contabo.yml down || true
+            
+            # Rebuild image cleanly using the repository-local Dockerfile
+            docker compose -f docker-compose.contabo.yml build --no-cache
+            docker compose -f docker-compose.contabo.yml up -d
+            
+            # The Nginx reverse proxy is already configured on the host to route
+            # api-tchedes.dartsia.app to localhost:3015
+            
+            echo "Backend Deployment to Contabo successful! 🚀"

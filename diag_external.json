@@ -1,0 +1,3 @@
+{
+  "external": "HTTP/2 526 \r\ndate: Mon, 02 Mar 2026 21:12:44 GMT\r\ncontent-type: text/plain; charset=UTF-8\r\ncontent-length: 15\r\ncache-control: private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0\r\nexpires: Thu, 01 Jan 1970 00:00:01 GMT\r\nreferrer-policy: same-origin\r\nx-frame-options: SAMEORIGIN\r\nserver: cloudflare\r\ncf-ray: 9d6366bfbc6850ff-AMS\r\nalt-svc: h3=\":443\"; ma=86400"
+}

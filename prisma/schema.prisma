@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                  String             @id @default(uuid())
+  name                String
+  webhook_secret      String             @default(uuid())
+  compliance_mode     String             @default("cloud")
+  data_retention_days Int                @default(30)
+  feature_flags       Json               @default("{}")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  ApiKeys             ApiKey[]
+  WebhookEndpoints    WebhookEndpoint[]
+  UserIdentities      UserIdentity[]
+  KycSessions         KycSession[]
+  KybSessions         KybSession[]
+  AuditLogs           AuditLog[]
+  Users               User[]
+}
+
+model User {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  email         String   @unique
+  password_hash String
+  first_name    String?
+  last_name     String?
+  role          String   @default("admin")
+  account_type  String   @default("business")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  Tenant        Tenant   @relation(fields: [tenant_id], references: [id])
+}
+
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  tenant_id String
+  key_hash  String   @unique
+  type      String   // "test" | "live"
+  prefix    String   // "sk_test_xxx"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  Tenant    Tenant   @relation(fields: [tenant_id], references: [id])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(uuid())
+  tenant_id String
+  url       String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Tenant    Tenant   @relation(fields: [tenant_id], references: [id])
+}
+
+model UserIdentity {
+  id           String       @id @default(uuid())
+  tenant_id    String
+  reference_id String       // Tenant internal ID
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  Tenant       Tenant       @relation(fields: [tenant_id], references: [id])
+  KycSessions  KycSession[]
+}
+
+model KycSession {
+  id               String       @id @default(uuid())
+  tenant_id        String
+  user_identity_id String
+  status           String       @default("created") // created | processing | verified | rejected | review_required
+  confidence_score Int?
+  extracted_fields Json?        // JSONB to hold raw mappings flexibly
+  engine_version   String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  Tenant           Tenant       @relation(fields: [tenant_id], references: [id])
+  UserIdentity     UserIdentity @relation(fields: [user_identity_id], references: [id])
+  Documents        Document[]
+  AuditLogs        AuditLog[]
+  KybDirectors     KybDirector[]
+}
+
+model Document {
+  id           String     @id @default(uuid())
+  session_id   String
+  type         String     // "front" | "back" | "selfie"
+  s3_key       String
+  sha256_hash  String     // Prevents duplicates & allows tracking
+  createdAt    DateTime   @default(now())
+
+  Session      KycSession @relation(fields: [session_id], references: [id])
+}
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  tenant_id      String
+  session_id     String?
+  actor          String      // "system" | "admin_xyz"
+  action         String
+  previous_state String?
+  new_state      String?
+  reason         String?     // REQUIRED if admin action
+  engine_version String?
+  createdAt      DateTime    @default(now())
+
+  Tenant         Tenant      @relation(fields: [tenant_id], references: [id])
+  Session        KycSession? @relation(fields: [session_id], references: [id])
+}
+
+model KybSession {
+  id               String       @id @default(uuid())
+  tenant_id        String
+  company_name     String?
+  country          String?
+  registration_number String?
+  company_type     String?
+  incorporation_date String?
+  registered_address String?
+  
+  status           String       @default("created") // created | processing | verified | rejected | review_required
+  confidence_score Int?
+  extracted_fields Json?        // JSONB to hold raw OCR mappings flexibly
+  engine_version   String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  Tenant           Tenant       @relation(fields: [tenant_id], references: [id])
+  Documents        KybDocument[]
+  Directors        KybDirector[]
+}
+
+model KybDocument {
+  id           String     @id @default(uuid())
+  session_id   String
+  type         String     // "rccm" | "tax"
+  s3_key       String
+  sha256_hash  String     // Prevents duplicates & allows tracking
+  createdAt    DateTime   @default(now())
+
+  Session      KybSession @relation(fields: [session_id], references: [id])
+}
+
+model KybDirector {
+  id                   String     @id @default(uuid())
+  kyb_session_id       String
+  kyc_session_id       String?    // Link to the underlying individual KYC session
+  
+  full_name            String?
+  date_of_birth        String?
+  nationality          String?
+  ownership_percentage Float?
+  
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  KybSession           KybSession   @relation(fields: [kyb_session_id], references: [id])
+  KycSession           KycSession?  @relation(fields: [kyc_session_id], references: [id])
+}

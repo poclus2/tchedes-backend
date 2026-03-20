@@ -1,0 +1,5 @@
+{
+  "root": "HTTP/1.1 307 Temporary Redirect\r\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\r\nx-nextjs-cache: HIT\r\nx-nextjs-prerender: 1\r\nx-nextjs-prerender: 1\r\nlocation: /overview\r\nx-nextjs-stale-time: 300\r\nX-Powered-By: Next.js\r\nCache-Control: s-maxage=31536000\r\nETag: \"11v589y1yj34y0\"\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 6412\r\nDate: Mon, 02 Mar 2026 16:04:27 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5",
+  "overview": "HTTP/1.1 307 Temporary Redirect\r\nlocation: /login\r\nDate: Mon, 02 Mar 2026 16:04:28 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5",
+  "login": "HTTP/1.1 200 OK\r\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\r\nx-nextjs-cache: HIT\r\nx-nextjs-prerender: 1\r\nx-nextjs-prerender: 1\r\nx-nextjs-stale-time: 300\r\nX-Powered-By: Next.js\r\nCache-Control: s-maxage=31536000\r\nETag: \"180pmb7notbau\"\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 14653\r\nDate: Mon, 02 Mar 2026 16:04:28 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5"
+}

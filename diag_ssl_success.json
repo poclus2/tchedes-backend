@@ -1,0 +1,4 @@
+{
+  "curl_local_https": "HTTP/2 307 \r\nserver: nginx/1.29.5\r\ndate: Mon, 02 Mar 2026 21:11:57 GMT\r\ncontent-type: text/html; charset=utf-8\r\ncontent-length: 6412\r\nvary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\r\nx-nextjs-cache: HIT\r\nx-nextjs-prerender: 1\r\nx-nextjs-prerender: 1\r\nlocation: /overview\r\nx-nextjs-stale-time: 300\r\nx-powered-by: Next.js\r\ncache-control: s-maxage=31536000\r\netag: \"11v589y1yj34y0\"",
+  "dash_logs": "> tchedes-dashboard@0.1.0 start\n> next start -H 0.0.0.0\n\n▲ Next.js 16.1.6\n- Local:         http://localhost:3000\n- Network:       http://0.0.0.0:3000\n\n✓ Starting...\n✓ Ready in 1376ms"
+}

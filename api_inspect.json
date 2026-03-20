@@ -1,0 +1,253 @@
+[
+    {
+        "Id": "5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306",
+        "Created": "2026-03-04T11:14:46.228632854Z",
+        "Path": "docker-entrypoint.sh",
+        "Args": [
+            "npm",
+            "start"
+        ],
+        "State": {
+            "Status": "created",
+            "Running": false,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 0,
+            "ExitCode": 127,
+            "Error": "failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error mounting \"/opt/tchedes-api/gcp-key.json\" to rootfs at \"/app/gcp-key.json\": mount src=/opt/tchedes-api/gcp-key.json, dst=/app/gcp-key.json, dstFd=/proc/thread-self/fd/11, flags=MS_BIND|MS_REC: not a directory: Are you trying to mount a directory onto a file (or vice-versa)? Check if the specified host path exists and is the expected type",
+            "StartedAt": "0001-01-01T00:00:00Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:cc6e4978a593809158f21676b3e10b3039acdea5995bbf77efd94be942c60f1e",
+        "ResolvConfPath": "/var/lib/docker/containers/5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306/hostname",
+        "HostsPath": "/var/lib/docker/containers/5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306/hosts",
+        "LogPath": "/var/lib/docker/containers/5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306/5c9f13ee2c7da201d840f9de53f0455c3177e2217b175c08365c4345c894d306-json.log",
+        "Name": "/tchedes-api",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/opt/tchedes-api/gcp-key.json:/app/gcp-key.json:ro",
+                "tchedes-api_uploads_data:/app/uploads:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "tchedes-api_default",
+            "PortBindings": {
+                "3000/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "3000"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "always",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/opt/tchedes-api/gcp-key.json",
+                "Destination": "/app/gcp-key.json",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "tchedes-api_uploads_data",
+                "Source": "/var/lib/docker/volumes/tchedes-api_uploads_data/_data",
+                "Destination": "/app/uploads",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "5c9f13ee2c7d",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "3000/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "REDIS_URL=redis://tchedes-redis:6379",
+                "FRONTEND_URL=https://app-tchedes.dartsia.app",
+                "DATABASE_URL=postgresql://tchedes_user:tchedes_secure_pass_2026@tchedes-db:5432/tchedes_db?schema=public",
+                "JWT_SECRET=super_secret_jwt_key_for_dev",
+                "REDIS_HOST=tchedes-redis",
+                "PORT=3000",
+                "GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json",
+                "NODE_ENV=production",
+                "CORS_ORIGIN=https://tchedes.dartsia.app,https://app-tchedes.dartsia.app,https://dashboard.dartsia.app",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NODE_VERSION=20.20.0",
+                "YARN_VERSION=1.22.22"
+            ],
+            "Cmd": [
+                "npm",
+                "start"
+            ],
+            "Image": "tchedes-api-tchedes-api",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "76b56150785c6147f0f57b836df45857f4978b94f90128eba20380bbc321342a",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "tchedes-db:service_started:false,tchedes-redis:service_started:false",
+                "com.docker.compose.image": "sha256:cc6e4978a593809158f21676b3e10b3039acdea5995bbf77efd94be942c60f1e",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "tchedes-api",
+                "com.docker.compose.project.config_files": "/opt/tchedes-api/docker-compose.yml",
+                "com.docker.compose.project.working_dir": "/opt/tchedes-api",
+                "com.docker.compose.service": "tchedes-api",
+                "com.docker.compose.version": "5.0.2"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "",
+            "SandboxKey": "",
+            "Ports": {},
+            "Networks": {
+                "tchedes-api_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "tchedes-api",
+                        "tchedes-api"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "",
+                    "EndpointID": "",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:607d297b39b1c5ca9e085400253a2051a87864533822c3933286fe02420155d1",
+            "size": 3356,
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]
