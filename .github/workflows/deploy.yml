@@ -58,6 +58,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
+            mkdir -p /opt/tchedes-backend
             cd /opt/tchedes-backend
             
             # Create a simple docker-compose.yml for production on the host
