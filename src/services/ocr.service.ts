@@ -383,6 +383,15 @@ export class OCRService {
                         if (parsedBirth) fields.date_of_birth = parsedBirth;
                     }
 
+                    // Override visual names with MRZ names to preserve perfect spacing
+                    // Visual OCR sometimes squashes spaces (e.g. "NJOYAPOKAM"), MRZ explicitly defines them via `<` and `<<`.
+                    if (fields.mrz_data.lastName) {
+                        fields.last_name = fields.mrz_data.lastName;
+                    }
+                    if (fields.mrz_data.firstName) {
+                        fields.first_name = fields.mrz_data.firstName;
+                    }
+
                 } catch (err) {
                     console.log("[OCRService] MRZ lines found but failed ICAO 9303 parse even after correction.", err);
                     fields.mrz_data = { valid: false, error: 'invalid_mrz_format' };
