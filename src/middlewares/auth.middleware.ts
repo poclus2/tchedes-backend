@@ -28,20 +28,14 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         }
 
         // 2. Otherwise assume it's a JWT from the Dashboard OR a Hosted Flow Token
-        const jwtSecret = process.env.JWT_SECRET || 'super_secret_tchedes_jwt_key_for_dev_only';
+        const jwtSecret = process.env.JWT_SECRET || 'super_secret_tchedes_jwt_key_prod';
         let decoded: any;
         try {
-            // Because the hosted controller uses a different secret in its file ('super_secret_jwt_key_for_dev')
-            // we should unify the secret or attempt to parse. Let's assume process.env.JWT_SECRET is used for both.
-            // Wait, hosted.controller.ts uses 'super_secret_jwt_key_for_dev' as fallback
-            const hostedSecret = process.env.JWT_SECRET || 'super_secret_jwt_key_for_dev';
-
-            try {
-                decoded = require('jsonwebtoken').verify(token, jwtSecret);
-            } catch (e) {
-                decoded = require('jsonwebtoken').verify(token, hostedSecret);
-            }
-        } catch (e) {
+            // Attempt to verify with the primary secret
+            decoded = require('jsonwebtoken').verify(token, jwtSecret);
+        } catch (e: any) {
+            // If primary fails, log specifically why and return 401
+            console.log(`[AUTH] Verification failed for token: ${e.message}`);
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
