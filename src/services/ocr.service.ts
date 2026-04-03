@@ -64,7 +64,7 @@ export class OCRService {
         if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         // Read image as base64
         const imageBuffer = fs.readFileSync(imagePath);
@@ -134,7 +134,7 @@ export class OCRService {
                     raw_text,
                     parsed_fields: fields,
                     confidence,
-                    engine_meta: { ocr_provider: 'gemini-1.5-flash', ocr_version: 'v1.5' }
+                    engine_meta: { ocr_provider: 'gemini-2.5-flash', ocr_version: 'v2.5' }
                 };
             } catch (err) {
                 console.warn(`[OCRService] Gemini failed, falling back to PaddleOCR:`, err);
