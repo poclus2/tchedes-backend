@@ -25,11 +25,14 @@ export class DecisionEngine {
         const reasons: string[] = [];
         const isOldLaminated = cniType === 'old_laminated';
 
-        // Merge fields
-        const merged_fields: CM_CNI_ExtractedFields = {
-            ...frontOcr.parsed_fields,
-            ...backOcr.parsed_fields
-        };
+        // Merge fields logically: prefer truthy values from back, but do not overwrite
+        // valid front values with undefined/null from back.
+        const merged_fields: CM_CNI_ExtractedFields = { ...frontOcr.parsed_fields };
+        for (const [key, value] of Object.entries(backOcr.parsed_fields)) {
+            if (value !== undefined && value !== null && value !== '') {
+                (merged_fields as any)[key] = value;
+            }
+        }
 
         // 1. Calculate Field Completeness (30% weight)
         // Old laminated CNI: no expiry date printed → remove from mandatory list
