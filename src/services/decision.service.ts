@@ -19,9 +19,11 @@ export class DecisionEngine {
     static evaluate(
         frontOcr: OCRExtractionResult,
         backOcr: OCRExtractionResult,
-        faceMatch: FaceMatchResult
+        faceMatch: FaceMatchResult,
+        cniType?: string
     ): DecisionResult {
         const reasons: string[] = [];
+        const isOldLaminated = cniType === 'old_laminated';
 
         // Merge fields
         const merged_fields: CM_CNI_ExtractedFields = {
@@ -30,7 +32,10 @@ export class DecisionEngine {
         };
 
         // 1. Calculate Field Completeness (30% weight)
-        const required = ['first_name', 'last_name', 'id_number', 'date_of_birth', 'date_of_expiry'];
+        // Old laminated CNI: no expiry date printed → remove from mandatory list
+        const required = isOldLaminated
+            ? ['first_name', 'last_name', 'id_number', 'date_of_birth']
+            : ['first_name', 'last_name', 'id_number', 'date_of_birth', 'date_of_expiry'];
         let presentCount = 0;
         for (const req of required) {
             if ((merged_fields as any)[req]) presentCount++;

@@ -1,9 +1,10 @@
 import fs from 'fs';
 import FormData from 'form-data';
-import fetch from 'node-fetch'; // assuming node-fetch is available, or use axios if installed
+import fetch from 'node-fetch';
 import { parse as parseMRZ } from 'mrz';
 import sharp from 'sharp';
 import path from 'path';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 
 export interface CM_CNI_ExtractedFields {
     first_name?: string;
@@ -26,8 +27,127 @@ export interface OCRExtractionResult {
     };
 }
 
+// ─── Gemini Vision OCR ────────────────────────────────────────────────────────
+// Used when GEMINI_API_KEY is set in environment.
+// Falls back to PaddleOCR + regex when not available.
+
+const GEMINI_PROMPT = `You are a KYC document specialist. Extract the identity fields from this document image.
+
+Return ONLY a valid JSON object with exactly these keys (use null if a field is not visible or unclear):
+{
+  "first_name": "given name(s) only",
+  "last_name": "family name / surname only",
+  "id_number": "digits only, no spaces or dashes",
+  "date_of_birth": "YYYY-MM-DD format",
+  "date_of_expiry": "YYYY-MM-DD format, or null if not present",
+  "date_of_issue": "YYYY-MM-DD format, or null if not present",
+  "document_type": "e.g. CNI Cameroun, Passport, Old Laminated CNI",
+  "has_mrz": true or false
+}
+
+Important rules:
+- Dates MUST be in YYYY-MM-DD format. Convert any DD/MM/YYYY or DD.MM.YYYY format.
+- id_number: digits only (fix common OCR errors: O→0, I→1, S→5, B→8)
+- first_name and last_name must be SEPARATED correctly
+- If this is the BACK of a document, focus on the MRZ zone (3 lines of uppercase + < characters)
+- Return ONLY the JSON object, no markdown, no explanation.`;
+
 export class OCRService {
+
+    // ── Gemini Extraction (primary if GEMINI_API_KEY set) ─────────────────────
+    private static async extractWithGemini(imagePath: string, side: 'front' | 'back'): Promise<{
+        fields: CM_CNI_ExtractedFields;
+        raw_text: string;
+        confidence: number;
+    }> {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+        // Read image as base64
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64Image = imageBuffer.toString('base64');
+        const mimeType = imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+        const imagePart: Part = {
+            inlineData: { data: base64Image, mimeType }
+        };
+
+        const sideHint = side === 'front'
+            ? 'This is the FRONT of the document (contains name, photo, date of birth).'
+            : 'This is the BACK of the document (may contain MRZ zone, ID number, dates).';
+
+        const result = await model.generateContent([
+            GEMINI_PROMPT + '\n\n' + sideHint,
+            imagePart
+        ]);
+
+        const responseText = result.response.text().trim();
+        console.log(`[OCRService][Gemini] Raw response (${side}):\n`, responseText);
+
+        // Parse JSON - strip any markdown code fences if present
+        const jsonStr = responseText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+        const parsed = JSON.parse(jsonStr);
+
+        // Normalize null strings
+        const clean = (v: any) => (v === null || v === 'null' || v === '' || v === 'N/A') ? undefined : String(v).trim();
+
+        const fields: CM_CNI_ExtractedFields = {
+            first_name: clean(parsed.first_name),
+            last_name: clean(parsed.last_name),
+            id_number: clean(parsed.id_number),
+            date_of_birth: clean(parsed.date_of_birth),
+            date_of_expiry: clean(parsed.date_of_expiry),
+            date_of_issue: clean(parsed.date_of_issue),
+            has_mrz: parsed.has_mrz === true,
+        };
+
+        return {
+            fields,
+            raw_text: `[Gemini Vision] ${parsed.document_type || 'Unknown document'} | side: ${side}`,
+            confidence: 95
+        };
+    }
+
+    // ── Main Entry Point ───────────────────────────────────────────────────────
     static async extractCameroonCNI(imagePath: string, side: 'front' | 'back'): Promise<OCRExtractionResult> {
+
+        // ── MODE 1: Gemini Vision (if API key is configured) ──────────────────
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                console.log(`[OCRService] Using Gemini Vision for ${side} image...`);
+                const { fields, raw_text, confidence } = await this.extractWithGemini(imagePath, side);
+                console.log(`[OCRService][Gemini] Extracted (${side}):`, JSON.stringify(fields, null, 2));
+
+                // If back side and has MRZ, try to parse it via PaddleOCR for checksum validation
+                // (Gemini gives us the fields, MRZ checksum still needs traditional parse)
+                if (side === 'back' && fields.has_mrz) {
+                    try {
+                        const mrzResult = await this.extractMRZFromBack(imagePath);
+                        if (mrzResult) fields.mrz_data = mrzResult;
+                    } catch (_) { /* MRZ parse optional */ }
+                }
+
+                return {
+                    raw_text,
+                    parsed_fields: fields,
+                    confidence,
+                    engine_meta: { ocr_provider: 'gemini-1.5-flash', ocr_version: 'v1.5' }
+                };
+            } catch (err) {
+                console.warn(`[OCRService] Gemini failed, falling back to PaddleOCR:`, err);
+                // Falls through to PaddleOCR below
+            }
+        }
+
+        // ── MODE 2: PaddleOCR + Regex (self-hosted fallback) ──────────────────
+        return this.extractWithPaddleOCR(imagePath, side);
+    }
+
+    // ── PaddleOCR Extraction (legacy / self-hosted mode) ──────────────────────
+    private static async extractWithPaddleOCR(imagePath: string, side: 'front' | 'back'): Promise<OCRExtractionResult> {
         let rawText = '';
         let confidence = 0;
         let providerName = 'paddleocr_local';
@@ -37,9 +157,7 @@ export class OCRService {
 
             let targetImagePath = imagePath;
 
-            // ── EXPERIMENTAL: Pre-Process Both Sides (OCR Enhancement) ──
-            // We apply grayscale, contrast stretch and upscale
-            // to make the characters much more legible to PaddleOCR
+            // Image pre-processing for better OCR quality
             try {
                 const parsed = path.parse(imagePath);
                 const enhancedPath = path.join(parsed.dir, `${parsed.name}-enhanced-v2${parsed.ext}`);
@@ -48,8 +166,8 @@ export class OCRService {
                 if (meta.width && meta.height) {
                     await sharp(imagePath)
                         .grayscale()
-                        .normalize() // Stretch contrast (auto-levels)
-                        .resize(Math.round(meta.width * 1.5), null, { kernel: sharp.kernel.lanczos3 }) // Upsample 1.5x
+                        .normalize()
+                        .resize(Math.round(meta.width * 1.5), null, { kernel: sharp.kernel.lanczos3 })
                         .jpeg({ quality: 100 })
                         .toFile(enhancedPath);
 
@@ -57,7 +175,7 @@ export class OCRService {
                     targetImagePath = enhancedPath;
                 }
             } catch (preprocessErr) {
-                console.error(`[OCRService] Failed to pre-process ${side} image, falling back to raw image:`, preprocessErr);
+                console.error(`[OCRService] Pre-process failed, using raw image:`, preprocessErr);
             }
 
             const formData = new FormData();
@@ -69,24 +187,18 @@ export class OCRService {
                 body: formData,
             });
 
-            if (!response.ok) {
-                console.error(`Erreur HTTP PaddleOCR: ${response.status} ${response.statusText}`);
-                throw new Error(`Erreur PaddleOCR API: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`PaddleOCR HTTP error: ${response.status}`);
 
             const data = await response.json() as any;
-
             if (data.raw_text !== undefined) {
                 rawText = data.raw_text;
                 confidence = data.confidence || 90;
             } else {
-                console.error("Erreur renvoyée par le module OCR:", data.detail || data);
-                throw new Error(data.detail || "OCR Extraction Error");
+                throw new Error(data.detail || 'OCR Extraction Error');
             }
 
         } catch (err) {
             console.error('OCR Microservice Error:', err);
-            // Fallback mock en cas de crash
             rawText = side === 'front'
                 ? "REPUBLIQUE DU CAMEROUN\nCARTE NATIONALE D'IDENTITE\nNOM: DOE\nPRENOMS: JOHN\nNE LE: 01/01/1990\nID: 112233445\nDELIVREE LE: 01/01/2020\nEXPIRE LE: 01/01/2030"
                 : "112233445";
@@ -97,12 +209,29 @@ export class OCRService {
         return {
             raw_text: rawText,
             parsed_fields: this.parseRegexMapping(rawText, side),
-            confidence: confidence,
-            engine_meta: {
-                ocr_provider: providerName,
-                ocr_version: 'v2.7.3'
-            }
+            confidence,
+            engine_meta: { ocr_provider: providerName, ocr_version: 'v2.7.3' }
         };
+    }
+
+    // ── MRZ Validation (used by Gemini mode for checksum) ─────────────────────
+    private static async extractMRZFromBack(imagePath: string): Promise<any> {
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(imagePath));
+        const ocrServiceUrl = process.env.OCR_SERVICE_URL || 'http://127.0.0.1:8000';
+        try {
+            const response = await fetch(`${ocrServiceUrl}/extract`, { method: 'POST', body: formData });
+            if (!response.ok) return null;
+            const data = await response.json() as any;
+            const rawText: string = data.raw_text || '';
+            const lines = rawText.split('\n');
+            const mrzLines = lines.map(l => l.trim().toUpperCase().replace(/\s+/g, '')).filter(l => l.match(/^[A-Z0-9<]{25,}$/));
+            if (mrzLines.length >= 2) {
+                const result = parseMRZ(mrzLines.slice(-3).join('\n'));
+                return { valid: result.valid, documentNumber: result.fields.documentNumber, firstName: result.fields.firstName, lastName: result.fields.lastName, birthDate: result.fields.birthDate, expiryDate: result.fields.expirationDate };
+            }
+        } catch (_) { return null; }
+        return null;
     }
 
     private static parseRegexMapping(rawText: string, side: 'front' | 'back'): CM_CNI_ExtractedFields {
@@ -110,7 +239,15 @@ export class OCRService {
         const lines = rawText.split('\n');
 
         // Sanitization Utility
-        const sanitizeId = (str: string) => str.replace(/O/g, '0').replace(/I/g, '1').replace(/\s/g, '');
+        // Sanitization Utility - maps common OCR letter-digit confusions
+        const sanitizeId = (str: string) => str
+            .replace(/O/g, '0').replace(/D/g, '0').replace(/Q/g, '0')
+            .replace(/I/g, '1').replace(/L/g, '1')
+            .replace(/S/g, '5')
+            .replace(/B/g, '8')
+            .replace(/G/g, '6')
+            .replace(/Z/g, '2')
+            .replace(/\s/g, '');
         const sanitizeDate = (str: string) => {
             // Very basic normalizer for MVP: '01/01/2020' -> '2020-01-01'
             const match = str.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
@@ -146,61 +283,91 @@ export class OCRService {
                 return '';
             };
 
-            // Nom
-            if (upper.includes('NOM:') || upper.match(/^(NOM|SURNAME)/)) {
+            // ── NOM (Nom de famille / Last Name) ────────────────────────────────────
+            // Layout A (new CNI):   "NOM/SURNAME:" EGOUME MOUYONG   (inline or next line)
+            // Layout B (old lam.):  "NOM:" EGOUME MOUYONG or just lines scanned top→bottom
+            if (upper.match(/^(NOM|SURNAME)\b/) && !upper.match(/PRENOMS|GIVEN/)) {
                 const cleanedLine = line.replace(/^(NOM\/SURNAME|NOM\s*:\s*SURNAME|NOM|SURNAME)[\s:]*/i, '').trim();
                 if (cleanedLine.length > 1) {
                     fields.last_name = cleanedLine;
                 } else if (!fields.last_name) {
-                    fields.last_name = getNextLine(i);
+                    // Try next non-empty line
+                    const next = getNextLine(i);
+                    if (next && next.length > 1 && !next.match(/^\d/) && !next.toUpperCase().match(/PRENOM|GIVEN|BIRTH|NAISSANCE|EXPIR|ISSUE|DELIVR/)) {
+                        fields.last_name = next;
+                    }
                 }
             }
 
-            // Prénom
-            if (upper.includes('PRENOM') || upper.match(/^(PR[EÉ]NOM|GIVEN\s*NAME)/)) {
-                const cleanedLine = line.replace(/^(PR[EÉ]NOMS?\/GIVEN\s*NAMES?|PR[EÉ]NOMS?|GIVEN\s*NAMES?)[\s:]*/i, '').trim();
-                if (cleanedLine.length > 1) {
+            // ── PRÉNOMS (First Name) ──────────────────────────────────────────────
+            // KEY INSIGHT: On old laminated CNIs, PaddleOCR reads column by column.
+            // The value (REKIYATOU) appears on the line BEFORE the label (PRENOMS/GIVENNAMES).
+            // The last_name (EGOUME MOUYONG) appears on the line AFTER the label.
+            if (upper.includes('PRENOM') || upper.match(/GIVEN\s*NAME/)) {
+                const cleanedLine = line.replace(/^(PRÉNOMS?\/GIVEN\s*NAMES?|PRENOMS?\/GIVEN\s*NAMES?|PRENOMS?|GIVEN\s*NAMES?)[\s:]*/i, '').trim();
+
+                if (cleanedLine.length > 1 && !cleanedLine.match(/^\d/)) {
+                    // Inline: "PRENOMS: REKIYATOU"
                     fields.first_name = cleanedLine;
-                } else if (!fields.first_name) {
-                    fields.first_name = getNextLine(i);
+                } else {
+                    // Value-before-label layout: REKIYATOU is the PREVIOUS line
+                    const prev = getPrevLine(i);
+                    if (prev && prev.length > 1 && !prev.match(/^\d/) && !prev.toUpperCase().match(/PROFESSION|OCCUPATION|SEXE|CARTE|NATIONAL|REPUBLIC|CAMEROUN/)) {
+                        fields.first_name = prev;
+                    }
+                    // Next line may be the last name in this layout
+                    if (!fields.last_name) {
+                        const next = getNextLine(i);
+                        if (next && next.length > 1 && !next.match(/^\d/) && !next.toUpperCase().match(/PROFESSION|REPUBLIC|CAMERA|NATIONAL|NE LE|BIRTH|EXPIR|ISSUE|DELIVR/)) {
+                            fields.last_name = next;
+                        }
+                    }
                 }
-                // Cleanup trailing 'S' sometimes caught by naive match
+                // Cleanup trailing 'S' artifact
                 if (fields.first_name && fields.first_name !== 'S' && fields.first_name.endsWith(' S')) {
                     fields.first_name = fields.first_name.replace(/\sS$/, '');
                 }
             }
 
-            // Date de naissance
+            // ── Date de naissance ─────────────────────────────────────────────────
             if (upper.includes('NE LE') || upper.match(/N[EÉ]\s+LE/) || upper.match(/NAISSANCE/) || upper.match(/BIRTH/)) {
                 const cleanedLine = line.replace(/^.*(DATE\s*D?E?\s*NAISSANCE(?:\/?DATE\s*OF\s*BIRTH)?|DATE\s*OF\s*BIRTH|N[EÉ]\s*LE)[\s:]*/i, '').trim();
                 if (cleanedLine.match(/\d/)) {
                     fields.date_of_birth = sanitizeDate(cleanedLine);
                 } else if (!fields.date_of_birth) {
+                    // Check prev and next
+                    const prev = getPrevLine(i);
                     const next = getNextLine(i);
-                    if (next.match(/\d/)) fields.date_of_birth = sanitizeDate(next);
+                    if (prev.match(/\d/)) fields.date_of_birth = sanitizeDate(prev);
+                    else if (next.match(/\d/)) fields.date_of_birth = sanitizeDate(next);
                 }
             }
 
-            // ID Number - Explicit Labels
+            // ── ID Number - Explicit Labels ────────────────────────────────────────
             if (upper.includes('ID:') || upper.match(/^ID\s+/) || upper.match(/^N[°º]\s*CNI/) || upper.match(/IDENTIFIANT UNIQUE/)) {
                 const cleanedLine = line.replace(/^.*(IDENTIFIANT\s*UNIQUE(?:\/?UNIQUE\s*IDENTIFIER)?|ID\s*N[O0]\.?|ID:|N[°º]\s*CNI)[\s:]*/i, '').trim();
                 if (cleanedLine.match(/\d{5,}/)) {
                     fields.id_number = sanitizeId(cleanedLine);
                 } else if (!fields.id_number) {
                     const next = getNextLine(i);
+                    const prev = getPrevLine(i);
                     if (next.match(/\d{5,}/)) fields.id_number = sanitizeId(next);
+                    else if (prev.match(/\d{5,}/)) fields.id_number = sanitizeId(prev);
                 }
             }
 
-            // ID Number - Fallback direct scan for ID number exactly 9 digits or 17 digits
+            // ── ID Number - Fallback: bare digit sequences (6-17 chars) ─────────────
+            // Old laminated CNI often has 8-9 digit IDs, OCR may drop 1 digit
             if (!fields.id_number) {
                 const cleanUpper = sanitizeId(upper);
-                if (cleanUpper.match(/^\d{9}$/) || cleanUpper.match(/^\d{17}$/)) {
+                // Match 6-17 consecutive digits not preceded/followed by more digits
+                const idMatch = cleanUpper.match(/^\d{6,17}$/);
+                if (idMatch) {
                     fields.id_number = cleanUpper;
                 }
             }
 
-            // Délivrée le / Date of Issue
+            // ── Délivrée le / Date of Issue ───────────────────────────────────────
             if (upper.match(/(DELIVR[EÉ]E|ISSUE)/)) {
                 const cleanedLine = line.replace(/^.*(DATE\s*DE\s*D[EÉ]LIVRANCE(?:\/?DATE\s*OF\s*ISSUE)?|D[EÉ]LIVR[EÉ]E\s*LE|DATE\s*OF\s*ISSUE)[\s:]*/i, '').trim();
                 if (cleanedLine.match(/\d/)) {
@@ -208,12 +375,12 @@ export class OCRService {
                 } else if (!fields.date_of_issue) {
                     const next = getNextLine(i);
                     const prev = getPrevLine(i);
-                    if (next.match(/\d/)) fields.date_of_issue = sanitizeDate(next);
-                    else if (prev.match(/\d/)) fields.date_of_issue = sanitizeDate(prev);
+                    if (prev.match(/\d/)) fields.date_of_issue = sanitizeDate(prev);
+                    else if (next.match(/\d/)) fields.date_of_issue = sanitizeDate(next);
                 }
             }
 
-            // Expire le / Date of Expiry
+            // ── Expire le / Date of Expiry ────────────────────────────────────────
             if (upper.match(/(EXPIR|VALABLE)/)) {
                 const cleanedLine = line.replace(/^.*(DATE\s*D[']?EXPIRATION(?:\/?DATE\s*OF\s*EXPIRY)?|EXPIRE\s*LE|DATE\s*OF\s*EXPIRY)[\s:]*/i, '').trim();
                 if (cleanedLine.match(/\d/)) {
@@ -226,14 +393,24 @@ export class OCRService {
                 }
             }
 
-            // Final fallback for any naked dates found if missing
-            const dateMatch = upper.match(/\b\d{2}[\.\-\/]\d{2}[\.\-\/]\d{4}\b/);
+            // ── Final fallback: naked dates with any separator (. / -) ─────────────
+            // Handles "19.02.2090" → corrects bad OCR years like 2090 → 1990/2000
+            const dateMatch = upper.match(/\b(\d{2})[.\-\/](\d{2})[.\-\/](\d{4})\b/);
             if (dateMatch) {
-                const dateStr = sanitizeDate(dateMatch[0]);
-                const year = parseInt(dateStr.split('-')[0]);
+                let year = parseInt(dateMatch[3]);
+                const day = dateMatch[1];
+                const month = dateMatch[2];
                 const currentYear = new Date().getFullYear();
 
-                // Advanced heuristic: prevent assigning a 2000 date to date_of_expiry when missing birthdate
+                // Correct clearly wrong OCR years (e.g., 2090 should be 1990)
+                if (year > currentYear + 20) {
+                    // e.g. 2090 → remove first digit after '20': likely 19YY
+                    const yStr = String(year);
+                    year = parseInt('19' + yStr.substring(2));
+                }
+
+                const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
                 if (!fields.date_of_birth && year < 2010 && year > 1920) {
                     fields.date_of_birth = dateStr;
                 } else if (!fields.date_of_expiry && year > currentYear && year < 2050) {
@@ -243,6 +420,8 @@ export class OCRService {
                 }
             }
         }
+
+        console.log(`\n\n=== OCR RAW TEXT (${side}) ===\n`, rawText, `\n=== EXTRACTED ===\n`, JSON.stringify(fields, null, 2), `\n\n`);
 
         if (side === 'back') {
             // ── MRZ Detection ─────────────────────────────────────────────────────

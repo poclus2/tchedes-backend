@@ -61,7 +61,7 @@ const worker = new Worker('kyc-processing', async (job) => {
         }
 
         // 3. Decision Engine
-        const decision = DecisionEngine.evaluate(frontOcr, backOcr, faceMatch);
+        const decision = DecisionEngine.evaluate(frontOcr, backOcr, faceMatch, cniType);
 
         console.log(`[Worker] Decision reached for ${sessionId}: ${decision.final_status} (${decision.final_confidence}%)`);
 
