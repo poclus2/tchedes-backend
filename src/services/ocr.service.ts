@@ -383,13 +383,45 @@ export class OCRService {
                         if (parsedBirth) fields.date_of_birth = parsedBirth;
                     }
 
-                    // Override visual names with MRZ names to preserve perfect spacing
-                    // Visual OCR sometimes squashes spaces (e.g. "NJOYAPOKAM"), MRZ explicitly defines them via `<` and `<<`.
+                    // Smart merge for names: VIZ is the source of truth (preserves accents, Full length).
+                    // MRZ is used ONLY to fix dropped spaces if the letters exactly match.
+                    const smartMergeName = (vizName: string | undefined, mrzName: string | undefined) => {
+                        if (!vizName) return mrzName;
+                        if (!mrzName) return vizName;
+                    
+                        const vizNormalized = vizName.toUpperCase().replace(/\s+/g, '');
+                        const mrzNormalized = mrzName.toUpperCase().replace(/\s+/g, '');
+                    
+                        if (vizNormalized === mrzNormalized) {
+                            let result = '';
+                            let vizIdx = 0;
+                            for (let i = 0; i < mrzName.length; i++) {
+                                if (mrzName[i] === ' ') {
+                                    result += ' ';
+                                } else if (vizIdx < vizName.length) {
+                                    while (vizIdx < vizName.length && vizName[vizIdx] === ' ' && mrzName[i] !== ' ') {
+                                        result += ' ';
+                                        vizIdx++;
+                                    }
+                                    if (vizIdx < vizName.length) {
+                                        result += vizName[vizIdx];
+                                        vizIdx++;
+                                    }
+                                }
+                            }
+                            while(vizIdx < vizName.length) {
+                               result += vizName[vizIdx++];
+                            }
+                            return result.replace(/\s+/g, ' ').trim();
+                        }
+                        return vizName;
+                    };
+
                     if (fields.mrz_data.lastName) {
-                        fields.last_name = fields.mrz_data.lastName;
+                        fields.last_name = smartMergeName(fields.last_name, fields.mrz_data.lastName);
                     }
                     if (fields.mrz_data.firstName) {
-                        fields.first_name = fields.mrz_data.firstName;
+                        fields.first_name = smartMergeName(fields.first_name, fields.mrz_data.firstName);
                     }
 
                 } catch (err) {
