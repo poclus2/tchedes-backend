@@ -83,6 +83,7 @@ jobs:
                   - REDIS_HOST=tchedes-redis
                   - JWT_SECRET=\${JWT_SECRET:-tchedes_super_secret_jwt_key_prod}
                   - CORS_ORIGIN=https://tchedes.dartsia.app,https://app-tchedes.dartsia.app,https://dashboard.dartsia.app
+                  - GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
                 depends_on:
                   - tchedes-db
                   - tchedes-redis
@@ -101,6 +102,7 @@ jobs:
                   - REDIS_URL=redis://tchedes-redis:6379
                   - REDIS_HOST=tchedes-redis
                   - OCR_SERVICE_URL=http://python-ocr:8000
+                  - GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
                 depends_on:
                   - tchedes-db
                   - tchedes-redis
