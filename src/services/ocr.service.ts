@@ -147,54 +147,64 @@ export class OCRService {
             };
 
             // Nom
-            if (upper.includes('NOM:') || upper.match(/^NOM(\s|\/|$)/)) {
-                const inlineMatch = upper.split(/[:]/)[1];
-                if (inlineMatch && inlineMatch.trim().length > 1) {
-                    fields.last_name = inlineMatch.trim();
+            if (upper.includes('NOM:') || upper.match(/^(NOM|SURNAME)/)) {
+                const cleanedLine = line.replace(/^(NOM\/SURNAME|NOM\s*:\s*SURNAME|NOM|SURNAME)[\s:]*/i, '').trim();
+                if (cleanedLine.length > 1) {
+                    fields.last_name = cleanedLine;
                 } else if (!fields.last_name) {
                     fields.last_name = getNextLine(i);
                 }
             }
 
             // Prénom
-            if (upper.includes('PRENOM') || upper.match(/^PR[EÉ]NOMS?(\s|\/|$)/)) {
-                const inlineMatch = upper.split(/[:]/)[1];
-                if (inlineMatch && inlineMatch.trim().length > 1) {
-                    fields.first_name = inlineMatch.replace(/S$/, '').trim();
+            if (upper.includes('PRENOM') || upper.match(/^(PR[EÉ]NOM|GIVEN\s*NAME)/)) {
+                const cleanedLine = line.replace(/^(PR[EÉ]NOMS?\/GIVEN\s*NAMES?|PR[EÉ]NOMS?|GIVEN\s*NAMES?)[\s:]*/i, '').trim();
+                if (cleanedLine.length > 1) {
+                    fields.first_name = cleanedLine;
                 } else if (!fields.first_name) {
                     fields.first_name = getNextLine(i);
+                }
+                // Cleanup trailing 'S' sometimes caught by naive match
+                if (fields.first_name && fields.first_name !== 'S' && fields.first_name.endsWith(' S')) {
+                    fields.first_name = fields.first_name.replace(/\sS$/, '');
                 }
             }
 
             // Date de naissance
-            if (upper.includes('NE LE') || upper.match(/N[EÉ]\s+LE/) || upper.match(/^DATEDE\s*NAISSANCE/)) {
-                const inlineMatch = upper.split(/LE[:]?/)[1];
-                if (inlineMatch && inlineMatch.match(/\d/)) {
-                    fields.date_of_birth = sanitizeDate(inlineMatch);
+            if (upper.includes('NE LE') || upper.match(/N[EÉ]\s+LE/) || upper.match(/NAISSANCE/) || upper.match(/BIRTH/)) {
+                const cleanedLine = line.replace(/^.*(DATE\s*D?E?\s*NAISSANCE(?:\/?DATE\s*OF\s*BIRTH)?|DATE\s*OF\s*BIRTH|N[EÉ]\s*LE)[\s:]*/i, '').trim();
+                if (cleanedLine.match(/\d/)) {
+                    fields.date_of_birth = sanitizeDate(cleanedLine);
                 } else if (!fields.date_of_birth) {
                     const next = getNextLine(i);
                     if (next.match(/\d/)) fields.date_of_birth = sanitizeDate(next);
                 }
             }
 
-            // ID Number
-            if (upper.includes('ID:') || upper.match(/^ID\s+/) || upper.match(/^N[°º]\s*CNI/)) {
-                const inlineMatch = line.split(/ID[:\s]+|CNI[\s:]+/i)[1];
-                if (inlineMatch && inlineMatch.match(/\d{5,}/)) {
-                    fields.id_number = sanitizeId(inlineMatch);
+            // ID Number - Explicit Labels
+            if (upper.includes('ID:') || upper.match(/^ID\s+/) || upper.match(/^N[°º]\s*CNI/) || upper.match(/IDENTIFIANT UNIQUE/)) {
+                const cleanedLine = line.replace(/^.*(IDENTIFIANT\s*UNIQUE(?:\/?UNIQUE\s*IDENTIFIER)?|ID\s*N[O0]\.?|ID:|N[°º]\s*CNI)[\s:]*/i, '').trim();
+                if (cleanedLine.match(/\d{5,}/)) {
+                    fields.id_number = sanitizeId(cleanedLine);
+                } else if (!fields.id_number) {
+                    const next = getNextLine(i);
+                    if (next.match(/\d{5,}/)) fields.id_number = sanitizeId(next);
                 }
             }
 
-            // Fallback direct scan for ID number exactly 9+ digits alone on a line for new cards
-            if (!fields.id_number && upper.match(/^\d{9,}$/)) {
-                fields.id_number = sanitizeId(upper);
+            // ID Number - Fallback direct scan for ID number exactly 9 digits or 17 digits
+            if (!fields.id_number) {
+                const cleanUpper = sanitizeId(upper);
+                if (cleanUpper.match(/^\d{9}$/) || cleanUpper.match(/^\d{17}$/)) {
+                    fields.id_number = cleanUpper;
+                }
             }
 
             // Délivrée le / Date of Issue
-            if (upper.includes('DELIVRE') || upper.match(/D[EÉ]LIVR[EÉ]E/) || upper.match(/DATE[\s]OF[\s]ISSUE/)) {
-                const inlineMatch = upper.split(/LE[:]?|ISSUE[:]?/)[1];
-                if (inlineMatch && inlineMatch.match(/\d/)) {
-                    fields.date_of_issue = sanitizeDate(inlineMatch);
+            if (upper.match(/(DELIVR[EÉ]E|ISSUE)/)) {
+                const cleanedLine = line.replace(/^.*(DATE\s*DE\s*D[EÉ]LIVRANCE(?:\/?DATE\s*OF\s*ISSUE)?|D[EÉ]LIVR[EÉ]E\s*LE|DATE\s*OF\s*ISSUE)[\s:]*/i, '').trim();
+                if (cleanedLine.match(/\d/)) {
+                    fields.date_of_issue = sanitizeDate(cleanedLine);
                 } else if (!fields.date_of_issue) {
                     const next = getNextLine(i);
                     const prev = getPrevLine(i);
@@ -204,10 +214,10 @@ export class OCRService {
             }
 
             // Expire le / Date of Expiry
-            if (upper.includes('EXPIRE LE') || upper.match(/EXPIRATION/) || upper.match(/DATE[\s]OF[\s]EXPIRY/)) {
-                const inlineMatch = upper.split(/LE[:]?|EXPIRY[:]?/)[1];
-                if (inlineMatch && inlineMatch.match(/\d/)) {
-                    fields.date_of_expiry = sanitizeDate(inlineMatch);
+            if (upper.match(/(EXPIR|VALABLE)/)) {
+                const cleanedLine = line.replace(/^.*(DATE\s*D[']?EXPIRATION(?:\/?DATE\s*OF\s*EXPIRY)?|EXPIRE\s*LE|DATE\s*OF\s*EXPIRY)[\s:]*/i, '').trim();
+                if (cleanedLine.match(/\d/)) {
+                    fields.date_of_expiry = sanitizeDate(cleanedLine);
                 } else if (!fields.date_of_expiry) {
                     const next = getNextLine(i);
                     const prev = getPrevLine(i);
@@ -223,13 +233,12 @@ export class OCRService {
                 const year = parseInt(dateStr.split('-')[0]);
                 const currentYear = new Date().getFullYear();
 
-                // Very naive heuristic to map naked dates if labels missed
-                // A 19XX date is birth, a >currentYear is expiry, a current/past is issue
-                if (!fields.date_of_birth && year < 2010) {
+                // Advanced heuristic: prevent assigning a 2000 date to date_of_expiry when missing birthdate
+                if (!fields.date_of_birth && year < 2010 && year > 1920) {
                     fields.date_of_birth = dateStr;
-                } else if (!fields.date_of_expiry && year > currentYear) {
+                } else if (!fields.date_of_expiry && year > currentYear && year < 2050) {
                     fields.date_of_expiry = dateStr;
-                } else if (!fields.date_of_issue && year >= 2010 && year <= currentYear) {
+                } else if (!fields.date_of_issue && year >= 2000 && year <= currentYear + 1) {
                     fields.date_of_issue = dateStr;
                 }
             }
