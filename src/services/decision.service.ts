@@ -25,10 +25,14 @@ export class DecisionEngine {
         const reasons: string[] = [];
         const isOldLaminated = cniType === 'old_laminated';
 
-        // Merge fields logically: prefer truthy values from back, but do not overwrite
-        // valid front values with undefined/null from back.
+        // Merge fields logically:
+        // - first_name, last_name, date_of_birth are ALWAYS taken from the FRONT
+        //   (the front face of the document is the authoritative source for identity fields)
+        // - back fields only supplement: id_number, date_of_issue, date_of_expiry, has_mrz, mrz_data
+        const FRONT_AUTHORITATIVE_FIELDS = ['first_name', 'last_name', 'date_of_birth'];
         const merged_fields: CM_CNI_ExtractedFields = { ...frontOcr.parsed_fields };
         for (const [key, value] of Object.entries(backOcr.parsed_fields)) {
+            if (FRONT_AUTHORITATIVE_FIELDS.includes(key)) continue; // front always wins for names
             if (value !== undefined && value !== null && value !== '') {
                 (merged_fields as any)[key] = value;
             }
@@ -88,20 +92,38 @@ export class DecisionEngine {
                 let mrzMismatchFound = false;
 
                 // Helper to normalize strings for comparison
-                const normalize = (str: string | undefined) => str ? str.toUpperCase().replace(/\s+/g, '') : '';
+                const normalize = (str: string | undefined) => str ? str.toUpperCase().replace(/[\s<]+/g, '') : '';
 
-                // Cross-check Last Name
-                if (mrz.lastName && normalize(merged_fields.last_name).includes(normalize(mrz.lastName))) {
-                    mrzMatchesCount++;
-                } else if (mrz.lastName && merged_fields.last_name) {
-                    mrzMismatchFound = true;
-                    reasons.push(`MRZ Last Name mismatch: Visual[${merged_fields.last_name}] vs MRZ[${mrz.lastName}]`);
+                // Compare MRZ against FRONT visual data (not merged, to avoid back contamination)
+                const vizLastName = frontOcr.parsed_fields.last_name;
+                const vizFirstName = frontOcr.parsed_fields.first_name;
+
+                // Cross-check Last Name: MRZ lastName may be multi-part (e.g. "NJOYA POKAM")
+                // and vizLastName from front should contain it (or vice versa)
+                if (mrz.lastName) {
+                    const mrzLN = normalize(mrz.lastName);
+                    const vizLN = normalize(vizLastName);
+                    if (vizLN.includes(mrzLN) || mrzLN.includes(vizLN)) {
+                        mrzMatchesCount++;
+                    } else if (vizLastName) {
+                        mrzMismatchFound = true;
+                        reasons.push(`MRZ Last Name mismatch: Visual[${vizLastName}] vs MRZ[${mrz.lastName}]`);
+                    }
                 }
 
-                // Cross-check First Name
-                if (mrz.firstName && normalize(merged_fields.first_name).includes(normalize(mrz.firstName.split('<')[0]))) {
-                    mrzMatchesCount++;
+                // Cross-check First Name (MRZ uses < as separator between given names)
+                if (mrz.firstName) {
+                    const mrzFN = normalize(mrz.firstName);
+                    const vizFN = normalize(vizFirstName);
+                    if (vizFN.includes(mrzFN.split('<')[0]) || mrzFN.includes(normalize(vizFirstName?.split(' ')[0]))) {
+                        mrzMatchesCount++;
+                    }
                 }
+
+                // If MRZ is valid and checksums pass, use MRZ names as authoritative
+                // (overrides Gemini visual extraction which may misread fonts)
+                if (mrz.lastName) merged_fields.last_name = mrz.lastName.replace(/</g, ' ').trim();
+                if (mrz.firstName) merged_fields.first_name = mrz.firstName.replace(/</g, ' ').trim();
 
                 // Give bonus if MRZ is valid and matches VIZ data
                 if (!mrzMismatchFound && mrzMatchesCount > 0) {
